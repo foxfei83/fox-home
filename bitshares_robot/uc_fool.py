@@ -1,4 +1,4 @@
-from bitshares import BitShares
+from bitshares import BitShares 
 from bitshares.blockchain import Blockchain
 from bitshares.market import Market
 from bitshares.account import Account
@@ -10,6 +10,12 @@ sys.path.append('/home/foxfei')
 from secret import get_bitshare_private_key
 from secret import get_bitshare_pwd
 from uc_config import logger
+
+import traceback
+
+def log_bt():
+    for line in traceback.format_stack():
+        logger.error(line.strip())
 
 def init():
     #try:
@@ -40,11 +46,14 @@ def auto_trans():
     ub = 6.50
     fox = Account("zfpx-fdjl")
     while True:
-        logger.info("my balance:%s", fox.balances)
+        start_time = time.time()
         logger.info("my open orders:%s", fox.openorders)
         my_usd = fox.balance("USD")
         my_cny = fox.balance("CNY")
-        logger.info("my USD:%s my CNY:%s", my_usd, my_cny)
+
+        if start_time % 60 < 10:
+            logger.info("my balance:%s", fox.balances)
+            logger.info("my USD:%s my CNY:%s", my_usd, my_cny)
 
         # get avg price
         avg_price = update_market(usd_cny_market)[0]
@@ -71,19 +80,23 @@ def auto_trans():
         for bid in top_orders["bids"]:
             price = bid["price"]
             quote = bid["quote"]
-            if price >= ub and my_usd > 0:
-                # sell_usd = min(my_usd, quote)
-                if my_usd["amount"] < quote["amount"]:
-                    sell_usd = my_usd
-                else:
-                    sell_usd = quote
-                left_usd = my_usd["amount"] - sell_usd["amount"]
-                logger.info("sell_usd:%s left_usd:%s price:%s", sell_usd, left_usd, price)
-                try:
-                    usd_cny_market.sell(price, sell_usd, 10, True, fox)
-                except Exception as e:
-                    logger.error("on except:%s", e)
-                my_usd["amount"] = left_usd
+            if price >= ub: 
+                print("price:%s >= ub:%s quote:%s", price, ub, quote)
+                if my_usd > 0:
+                    # sell_usd = min(my_usd, quote)
+                    if my_usd["amount"] < quote["amount"]:
+                        sell_usd = my_usd
+                    else:
+                        sell_usd = quote
+                    left_usd = my_usd["amount"] - sell_usd["amount"]
+                    print("sell_usd:%s left_usd:%s price:%s bid:%s", sell_usd, left_usd, price, bid)
+                    logger.info("sell_usd:%s left_usd:%s price:%s bid:%s", sell_usd, left_usd, price, bid)
+                    try:
+                        usd_cny_market.sell(price, sell_usd, 0, True, fox)
+                    except Exception as e:
+                        logger.error("on except:%s", e)
+                        log_bt()
+                    my_usd["amount"] = left_usd
             # else:
             #    print("price:", price, " < ub:", ub)
 
@@ -91,24 +104,28 @@ def auto_trans():
         for ask in top_orders["asks"]:
             price = ask["price"]
             base = ask["base"]
-            if price <= lb and my_cny > 0:
-                left_cny = my_cny["amount"] - base["amount"]
-                if base["amount"] < my_cny["amount"]:
-                    buy_cny = base["amount"]
-                else:
-                    buy_cny = my_cny["amount"]
+            if price <= lb:
+                print("price:%s <= lb:%s base:%s", price, lb, base)
+                if my_cny > 0:
+                    if base["amount"] < my_cny["amount"]:
+                        buy_cny = base["amount"]
+                    else:
+                        buy_cny = my_cny["amount"]
                     buy_usd = buy_cny / price
                     left_cny = my_cny["amount"] - buy_cny
-                    logger.info("buy_usd:%s left_cny:%s price:%s", buy_usd, left_cny, price)
+                    print("buy_usd:%s left_cny:%s price:%s ask:%s", buy_usd, left_cny, price, ask)
+                    logger.info("buy_usd:%s left_cny:%s price:%s ask:%s", buy_usd, left_cny, price, ask)
                     try:
-                        usd_cny_market.buy(price, buy_usd, 10, True, fox)
+                        usd_cny_market.buy(price, buy_usd, 0, True, fox)
                     except Exception as e:
                         logger.error("on except:%s", e)
+                        log_bt()
                     my_cny["amount"] = left_cny
             # else:
-            #    print("price:", price, " > ub:", lb)
+            #    print("price:", price, " > lb:", lb)
 
         usd_cny_market.bitshares.wallet.lock()
-        time.sleep(10)
+        delta_t = time.time() - start_time
+        time.sleep(max(1, 10 - delta_t))
 
 init()
