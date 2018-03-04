@@ -4,6 +4,7 @@ from bitshares.market import Market
 from bitshares.account import Account
 from bitshares.wallet import Wallet 
 import time
+from uc_config import logger
 
 #testnet = BitShares(
 #    "wss://node.testnet.bitshares.eu",
@@ -20,12 +21,17 @@ def update_market(market):
     global _m_avg_price
     global last_price
 
-    data = market.ticker()
-    # print("market ticker:", data)
+    try:
+        data = market.ticker()
+        # print("market ticker:", data)
+        _24h_avg_price = data["quoteVolume"] / data["baseVolume"]
+        print("24h avg price:", _24h_avg_price, "latest price:", data["latest"], "change:", data["percentChange"])
+        return [_24h_avg_price, data["latest"]]
+    except Exception as e:
+        logger.error("on except:%s", e)
+        return [0, 0]
+        # log_bt()
 
-    _24h_avg_price = data["quoteVolume"] / data["baseVolume"]
-    print("24h avg price:", _24h_avg_price, "latest price:", data["latest"], "change:", data["percentChange"])
-    return [_24h_avg_price, data["latest"]]
 
     now = time.time()
     _m_point = now // 1800 
